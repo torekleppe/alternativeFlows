@@ -31,6 +31,17 @@ class HMCstate:
     def momentumFlip(self):
         self.p = -self.p
     
+    def kineticLangevinRefresh(self,gamma,h):
+        rho = np.exp(-gamma*h)
+        self.p = rho*self.p + np.sqrt(1.0-rho**2)*np.random.normal(size=len(self.p))
+        self.Ham = -self.f + 0.5*np.dot(self.p,self.p)
+        
+    def partialRefresh(self,rho):
+        
+        self.p = rho*self.p + np.sqrt(1.0-rho**2)*np.random.normal(size=len(self.p))
+        self.Ham = -self.f + 0.5*np.dot(self.p,self.p)
+    
+    
     def velocity(self):
         return(self.p)
     

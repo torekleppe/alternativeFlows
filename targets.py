@@ -70,7 +70,7 @@ def modFunnel(q,v=None):
 
 
 def zeroMeanAR1(q):
-    rho = 0.95
+    rho = 0.99
     d = len(q)
     lp = -0.5*q[0]**2 - 0.5/(1.0-rho**2)*np.sum((q[1:d]-rho*q[0:(d-1)])**2)
     g = np.zeros_like(q)
@@ -109,7 +109,7 @@ def funnel10(q,hessian=False):
 
 
 def funnel10rescaled(q,hessian=False):
-    S = np.ones(11)
+    S = np.repeat(np.exp(9.0/4.0),11)
     S[0] = 3.0
     qb = S*q
     lp,g = funnel10(qb)

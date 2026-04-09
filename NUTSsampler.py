@@ -16,16 +16,18 @@ class fullOrbit_:
     def __init__(self,s):
         self.ind = 0
         self.qs = s.q.reshape(-1,1)
+        self.it = np.array([0])
         
         
 
-    def pushF(self,s):
+    def pushF(self,s,it):
         self.qs = np.hstack([self.qs, s.q.reshape(-1,1)])
+        self.it = np.concat((self.it,np.array([it])))
         
     
-    def pushB(self,s):
+    def pushB(self,s,it):
         self.qs = np.hstack([s.q.reshape(-1,1),self.qs])
-        
+        self.it = np.concat((np.array([it]),self.it))
         self.ind += 1
 
     def plot(self):
@@ -220,7 +222,7 @@ class NUTSampler:
         # keep track of which state gets sampled (all trailing underscores are instrumentation)
         L_ = 0
         
-        if(self.debug): fo = fullOrbit_(scurr)
+        if(self.debug): self.fo = fullOrbit_(scurr)
             
         
         
@@ -233,7 +235,7 @@ class NUTSampler:
             cljacP += lJac
             b = 1
             self.lwts[b] = -sP.Ham + lJac
-            if(self.debug): fo.pushF(sP)
+            if(self.debug): self.fo.pushF(sP,1)
             
             subOrbitWtSum = np.sum(self.lwts.normalizedWts(b, b))
             if(np.random.uniform()<subOrbitWtSum/accWtsum):
@@ -249,7 +251,7 @@ class NUTSampler:
             cljacM += lJac
             a = -1
             self.lwts[a] = -sM.Ham + lJac
-            if(self.debug): fo.pushB(sM)
+            if(self.debug): self.fo.pushB(sM,1)
             
             subOrbitWtSum = np.sum(self.lwts.normalizedWts(a, a))
             if(np.random.uniform()<subOrbitWtSum/accWtsum):
@@ -259,7 +261,10 @@ class NUTSampler:
         # check first u-turn
         if(self.stopC(sM,sP)):
             dd=pd.Series([0,L_,a,b,a,b,0],index=['NutsIter','L','a','b','aInt','bInt','NUTtype'])
-            
+            if(self.debug):
+                self.stopState1 = copy.deepcopy(sM)
+                self.stopState2 = copy.deepcopy(sP)
+              
             #print("Uturn at first doubling")
             return(sSampled,dd)
         
@@ -287,7 +292,7 @@ class NUTSampler:
                             # integrate and store weight
                             (sP,lJac) = self.step(sP,self.lp,self.tp)
                             cljacP += lJac
-                            if(self.debug): fo.pushF(sP)
+                            if(self.debug): self.fo.pushF(sP,i+1)
                             bnew += 1
                             self.lwts[bnew] = -sP.Ham + cljacP
                             
@@ -300,7 +305,7 @@ class NUTSampler:
                             if(subOrbitWtSum> 0.0 and np.random.uniform() < wt/subOrbitWtSum):
                                 subSampled = copy.deepcopy(sP)
                                 Lsub_ = bnew
-                    if(self.debug): fo.plot()
+                    
                     
                     
                     # Uturn-checks
@@ -308,6 +313,10 @@ class NUTSampler:
                                   self.stateList.getState(tasks[j,1]))):
                         # rejecting the current suborbit
                         dd=pd.Series([i,L_,a,b,anew,bnew,1],index=['NutsIter','L','a','b','aInt','bInt','NUTtype'])
+                        if(self.debug):
+                            self.stopState1 = copy.deepcopy(self.stateList.getState(tasks[j,1]))
+                            self.stopState2 = copy.deepcopy(self.stateList.getState(tasks[j,0]))
+                          
                         #print("sub-orbit: " + str(tasks[j,]))
                         return(sSampled,dd)
                     # clean up memory (intermediate states no longer needed)
@@ -335,7 +344,7 @@ class NUTSampler:
                             sM.momentumFlip()
                             
                             cljacM += lJac
-                            if(self.debug): fo.pushB(sM)
+                            if(self.debug): self.fo.pushB(sM,i+1)
                             anew -= 1
                             
                             self.lwts[anew] = -sM.Ham + cljacM
@@ -351,13 +360,17 @@ class NUTSampler:
                                 Lsub_ = anew
                             
                         
-                        if(self.debug): fo.plot()
+                        
                     # Uturn-checks
                     if(self.stopC(self.stateList.getState(tasks[j,1]),
                                   self.stateList.getState(tasks[j,0]))):
                         # rejecting the current suborbit
                         dd=pd.Series([i,L_,a,b,anew,bnew,1],index=['NutsIter','L','a','b','aInt','bInt','NUTtype'])
                         #print("sub-orbit U-turn: " + str(tasks[j,]))
+                        if(self.debug):
+                            self.stopState1 = copy.deepcopy(self.stateList.getState(tasks[j,1]))
+                            self.stopState2 = copy.deepcopy(self.stateList.getState(tasks[j,0]))
+                            
                         return(sSampled,dd)
                     
                     # clean up memory (intermediate states no longer needed)
@@ -376,6 +389,11 @@ class NUTSampler:
             if(self.stopC(sM,sP)):
                 dd=pd.Series([i,L_,anew,bnew,anew,bnew,0],index=['NutsIter','L','a','b','aInt','bInt','NUTtype'])
                 #print("global U-turn")
+                
+                if(self.debug):
+                    self.stopState1 = copy.deepcopy(sM)
+                    self.stopState2 = copy.deepcopy(sP)
+                
                 return(sSampled,dd)
             
             
@@ -386,6 +404,32 @@ class NUTSampler:
         #print("expended available integration steps")
         dd=pd.Series([self.M,L_,a,b,a,b,2],index=['NutsIter','L','a','b','aInt','bInt','NUTtype'])
         return(sSampled,dd)
+        
+
+    
+
+    def singleIter(self,lpFun,s0,step,tp0,M=10,stopCondition=UturnCond):
+        self.plans = []
+        for i in range(0,M+1):
+            self.plans.append(self.subTreePlan(2**i))
+        
+        
+        self.s0 = copy.deepcopy(s0)
+        self.lp = lpFun
+        self.step = step
+        self.stopC = stopCondition
+        self.tp = copy.deepcopy(tp0)
+        
+        self.M = M
+        self.stateList = stateStore()
+        self.lwts = lwtVector(2**(M+1))
+        
+        (sc,diagRow) = self.buildOrbit(s0)
+        
+        self.sc = sc
+        
+
+
         
 
     def run(self,lpFun,q0,
@@ -400,7 +444,8 @@ class NUTSampler:
             orbitLWtRangeTarget=0.3,
             orbitLWtRangeQuantile=0.9,
             basicTarget=0.8,
-            deltaOff=False):
+            deltaOff=False,
+            partialMomentumRefresh=-1.0):
         
         # pre-compute U-turn check plans
         self.plans = []
@@ -435,32 +480,46 @@ class NUTSampler:
         
         sc = step.getState()
         sc.firstEval(self.lp,q0,self.tp)
+        sc.momentumRefresh(self.lp, self.tp) # ensure partial refresh works
         
         # main MCMC iteration loop
         for it in range(niter):
             if((it+1) % 1000 == 0): print("iteration # " + str(it+1))
             
             self.step.reset()
-            
-            sc.momentumRefresh(self.lp, self.tp)
+            if(partialMomentumRefresh<0.0):
+                sc.momentumRefresh(self.lp, self.tp)
+            else: 
+                print(sc.p)
+                sc.partialRefresh(partialMomentumRefresh)
+                
+                
             (sc,diagRow) = self.buildOrbit(sc)
             
             self.samples[:,it+1] = generated(sc.q)
             
             ESSfrac = self.lwts.wtsESS()
+            
             lwtsRange = self.lwts.lwtsRange()
             
-            tuningDiag = pd.Series([self.tp.delta,self.tp.hMacro,ESSfrac,lwtsRange],index=['delta','h','ESSfrac','lwtsRange'])
+            
+            
+            tuningDiag = pd.Series([self.tp.delta,self.tp.hMacro,ESSfrac,lwtsRange,sc.Ham],index=['delta','h','ESSfrac','lwtsRange','Hamiltonian'])
             
             diagnostics.append(pd.concat([tuningDiag,diagRow,step.diagnostics()]))
             
             if(it<nwarmup):
-                
+            
+                if(hasattr(step,'conservedRange')):
+                    conservedRange = step.conservedRange()
+                else:
+                    conservedRange = lwtsRange
+                    
             
                 #deltaDA.observe(ESSfrac)
                 #deltaDA.observe(self.lwts.lwtsRange())
                 #if(it>10): self.tp.delta = deltaDA.par()
-                deltaQA.push(np.log(lwtsRange/self.tp.delta))
+                deltaQA.push(np.log(conservedRange/self.tp.delta))
                 hQA.pushVec(np.log(step.Cobs))
                 
                 #deltaP2.push(np.log(lwtsRange/self.tp.delta))
@@ -468,12 +527,14 @@ class NUTSampler:
                 
                 if(it>10 and (not deltaOff)): self.tp.delta = orbitLWtRangeTarget/np.exp(deltaQA.quantile(orbitLWtRangeQuantile))
                 if(it>10): self.tp.hMacro = (self.tp.delta*(2.0**self.tp.Cmin)**2/np.exp(hQA.quantile(basicTarget)))**(1.0/3.0)
-                
+                if(it>10 and hasattr(self.tp,'oSigmaSq')):
+                    if(self.tp.thermostatFac>0.0):
+                        self.tp.oSigmaSq = 1.0/(self.tp.thermostatFac*self.tp.hMacro*2**(-self.tp.Cmin))
                 #if(it>10): self.tp.delta = orbitLWtRangeTarget/np.exp(deltaP2.quantile())
                 #if(it>10): self.tp.hMacro = (self.tp.delta/np.exp(hP2.quantile()))**(1.0/3.0)
             
             
-                print((self.tp.delta,self.lwts.lwtsRange()))
+                print((self.tp.delta,conservedRange))
                 print(self.tp.hMacro)
         
         self.diagnostics = pd.DataFrame(diagnostics)

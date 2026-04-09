@@ -253,45 +253,45 @@ class adaptVSstepE(VSintegrators):
 
 
        
-import matplotlib.pyplot as plt
-#np.random.seed(1)
-lp = td.modFunnel
-tp = VStuningPars(Cmax=6)
-tp.hMacro = 0.01
-s = VSState()
-s.firstEval(lp,np.array([-1.0,-0.01]),tp)
-s.momentumRefresh(lp,tp)
+# import matplotlib.pyplot as plt
+# #np.random.seed(1)
+# lp = td.modFunnel
+# tp = VStuningPars(Cmax=6)
+# tp.hMacro = 0.01
+# s = VSState()
+# s.firstEval(lp,np.array([-1.0,-0.01]),tp)
+# s.momentumRefresh(lp,tp)
 
-nstep = 1000
-step = adaptVSstepE()
-qs = np.zeros((2,nstep+1))
-qs[:,0] = s.q
+# nstep = 1000
+# step = adaptVSstepE()
+# qs = np.zeros((2,nstep+1))
+# qs[:,0] = s.q
 
-os = np.zeros((2,nstep+1))
-os[:,0] = s.omega
+# os = np.zeros((2,nstep+1))
+# os[:,0] = s.omega
 
-Hams = np.zeros(nstep+1)
-Hams[0] = s.Ham
-ljac = 0.0
-ljacs = np.zeros(nstep+1)
+# Hams = np.zeros(nstep+1)
+# Hams[0] = s.Ham
+# ljac = 0.0
+# ljacs = np.zeros(nstep+1)
 
 
-for i in range(nstep):
-    (s,lwt) = step(s,lp,tp)
-    qs[:,i+1] = s.q
-    os[:,i+1] = s.omega
-    Hams[i+1] = s.Ham
-    ljac += lwt
-    ljacs[i+1] = ljac    
+# for i in range(nstep):
+#     (s,lwt) = step(s,lp,tp)
+#     qs[:,i+1] = s.q
+#     os[:,i+1] = s.omega
+#     Hams[i+1] = s.Ham
+#     ljac += lwt
+#     ljacs[i+1] = ljac    
 
-plt.subplot(1,4,1)    
-plt.plot(qs[0,:],qs[1,:])
-plt.subplot(1,4,2)
-plt.plot(Hams)
-plt.subplot(1,4,3)
-plt.plot(ljacs)
-plt.subplot(1,4,4)
-plt.plot(os[0,:],os[1,:])
+# plt.subplot(1,4,1)    
+# plt.plot(qs[0,:],qs[1,:])
+# plt.subplot(1,4,2)
+# plt.plot(Hams)
+# plt.subplot(1,4,3)
+# plt.plot(ljacs)
+# plt.subplot(1,4,4)
+# plt.plot(os[0,:],os[1,:])
 
 
 

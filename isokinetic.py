@@ -36,6 +36,12 @@ class IKState:
         t = c1*self.u + np.sqrt(1.0-c1**2)*Z
         self.u = t/np.linalg.norm(t)
         
+        
+    def kineticLangevinRefresh(self,gamma,h):
+        rho = np.exp(-gamma*h)
+        p = rho*self.u + np.sqrt(1.0-rho**2)/np.sqrt(len(self.u))*np.random.normal(size=len(self.u))
+        self.u = p/np.linalg.norm(p)
+        
     def velocity(self):
         return(self.u)
         
