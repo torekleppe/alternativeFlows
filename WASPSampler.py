@@ -3,177 +3,26 @@ import copy
 import targets as td
 import hamiltonian as hmc
 import isokinetic as iso
-import noseHoover as nh
+import noseHooverVec as nh
 import NUTSsampler as nuts
 import pandas as pd
 import MCMCutils as ut
 import matplotlib.pyplot as plt
 import arviz as az
-
-# class WASPSampler:
-    
-    
-    
-#     def run(self,lpFun,q0,
-#             step=hmc.adaptHMCstepE(),
-#             tp0=hmc.HMCtuningPars(),
-#             generated=lambda q : q,
-#             center=0.0,
-#             niter=100000,
-#             nwarmup=1000,
-#             N=10,
-#             basicTarget=0.8
-#             ):
-        
-#         self.tp = copy.deepcopy(tp0)
-#         self.step = copy.deepcopy(step)
-#         d = len(q0)
-#         g0 = generated(q0)
-        
-#         self.samples = np.zeros((len(g0),niter+1))
-#         self.samples[:,0] = g0
-        
-#         diagnostics = []
-        
-#         hQA = nuts.quantileArray()
-        
-#         lwts = nuts.lwtVector(2**(N+1))
-        
-#         s = step.getState()
-#         s.firstEval(lpFun,q0,self.tp)
-#         s.momentumRefresh(lpFun, self.tp)
-        
-        
-#         if (np.ndim(center) == 0):
-#             cen = np.repeat(center, d)
-#         else:
-#             cen = center
-        
-#         #plt.plot(s.q[0],s.q[1],'.')
-        
-#         for it in range(niter):
-#             if((it+1) % 1000 == 0): print("iteration # " + str(it+1))
-#             self.step.reset()
-#             sf = copy.deepcopy(s)
-#             sb = copy.deepcopy(s)
-#             subSampled = copy.deepcopy(s)
-#             lwts.reset()
-#             lwts[0] = -s.Ham
-#             ljf = 0.0
-#             ljb = 0.0
-#             a = 0
-#             b = 0
-            
-            
-#             accWtsum = 1.0
-#             subOrbitWtSum = 0.0
-            
-            
-#             z1 = np.random.normal(size=d)
-#             z2 = np.random.normal(size=d)
-#             eta = (1.0/np.sum(z1**2))*z1
-#             z2 = z2 - (np.sum(z2*eta))*eta
-#             gam = (1.0/np.sum(z2**2))*z2
-            
-#             forwardDone = False
-#             backwardDone = False
-            
-#             for i in range(N-1):
-#                 nstep = 2**i
-                
-                
-#                 accWtsum += subOrbitWtSum
-#                 subOrbitWtSum = 0.0
-                
-#                 if(np.random.uniform()<0.5):
-#                     #print("f")
-#                     # forward integration
-                    
-                        
-#                     for j in range(nstep):
-#                         qOld = copy.deepcopy(sf.q)
-#                         (sf,lj) = self.step(sf,lpFun,self.tp)
-                        
-#                         cqs = sf.q-cen
-#                         cq = qOld-cen
-                        
-#                         stop1 = np.dot(cqs,eta)*np.dot(cq,eta) < 0.0 
-#                         stop2 = max(np.dot(gam,cqs),np.dot(gam,cq)) > 0.0
-                        
-#                         if(stop1 and stop2):
-#                             forwardDone = True
-#                             break
-                        
-                        
-#                         b += 1
-#                         ljf += lj
-#                         lwts[b] = -sf.Ham + ljf
-                        
-#                         wt = lwts.normalizedWt(b)
-                        
-#                         subOrbitWtSum += wt
-#                         if(subOrbitWtSum> 0.0 and np.random.uniform() < wt/subOrbitWtSum):
-#                             subSampled = copy.deepcopy(sf)
-                        
-#                         #plt.plot(sf.q[0],sf.q[1],'r.')
-                    
-                
-#                 else:
-#                     #print("b")
-#                     # backward integration
-                   
-#                     for j in range(nstep):
-#                         qOld = copy.deepcopy(sb.q)
-#                         sb.momentumFlip()
-#                         (sb,lj) = self.step(sb,lpFun,self.tp)
-                        
-#                         cqs = sf.q-cen
-#                         cq = qOld-cen
-                        
-#                         stop1 = np.dot(cqs,eta)*np.dot(cq,eta) < 0.0 
-#                         stop2 = max(np.dot(gam,cqs),np.dot(gam,cq)) > 0.0
-                        
-#                         if(stop1 and stop2):
-#                             backwardDone = True
-#                             break
-                        
-                        
-                        
-                        
-#                         a -= 1
-#                         sb.momentumFlip()
-#                         ljb += lj
-                        
-#                         lwts[a] = -sb.Ham + ljb
-                        
-#                         wt = lwts.normalizedWt(a)
-#                         subOrbitWtSum += wt
-#                         if(subOrbitWtSum> 0.0 and np.random.uniform() < wt/subOrbitWtSum):
-#                             subSampled = copy.deepcopy(sb)
-                            
-#                             #plt.plot(sb.q[0],sb.q[1],'g.')
-                        
-                
-#                 if(forwardDone or backwardDone):
-#                     break
-                
-#                 if(np.random.uniform()<subOrbitWtSum/accWtsum):
-#                     sSampled = copy.deepcopy(subSampled)
-                
-                
-#             s = copy.deepcopy(sSampled)
-            
-#             self.samples[:,it+1] = generated(s.q) 
-#             #plt.plot(sSampled.q[0],sSampled.q[1],'rs')
-#             s.momentumRefresh(lpFun, self.tp)
+import P2quantile as p2q
 
 
 
 class WASPSampler:
     
+    def __init__(self,debug=False,orbitStats=False): # make consistent with NUTS
+        self.orbitStats = orbitStats
+    
     def defaultWts(self,i,weightScale,weightRange,medianOrbitSteps):
         return 1.0 + weightScale*(1.0 - np.exp(-0.5*(i/(weightRange*medianOrbitSteps))**2))
 
+    def name(self):
+        return("WASPS")
     
     def run(self,lpFun,q0,
             step=hmc.adaptHMCstepE(),
@@ -187,9 +36,10 @@ class WASPSampler:
             orbitLWtRangeTarget=0.3,
             orbitLWtRangeQuantile=0.9,
             basicTarget=0.8,
-            weightRange=0.25,
-            weightScale=5.0,
-            deltaOff=False):
+            weightRange=0.5,# 0.25,
+            weightScale=10.0, # 5.0,
+            deltaOff=False,
+            adaptCenterOff=False):
         
         self.tp = copy.deepcopy(tp0)
         self.step = copy.deepcopy(step)
@@ -198,6 +48,12 @@ class WASPSampler:
         
         self.samples = np.zeros((len(g0),niter+1))
         self.samples[:,0] = g0
+        
+        if(self.orbitStats):
+            self.orbitMax = np.zeros((len(g0),niter))
+            self.orbitMin = np.zeros((len(g0),niter))
+            self.sorbitMax = np.zeros((len(g0),niter))
+            self.sorbitMin = np.zeros((len(g0),niter))
         
         diagnostics = []
         
@@ -214,6 +70,10 @@ class WASPSampler:
             cen = np.repeat(center, d)
         else:
             cen = center
+        
+        if(not adaptCenterOff):
+            cenP2s = p2q.P2vector(d,prob=0.5)
+        
         
         lwts = nuts.lwtVector(2*L)
         
@@ -255,15 +115,28 @@ class WASPSampler:
             
             z1 = np.random.normal(size=d)
             z2 = np.random.normal(size=d)
-            eta = (1.0/np.sum(z1**2))*z1
+            eta = (1.0/np.sqrt(np.sum(z1**2)))*z1
             z2 = z2 - (np.sum(z2*eta))*eta
-            gam = (1.0/np.sum(z2**2))*z2
+            gam = (1.0/np.sqrt(np.sum(z2**2)))*z2
+            
+            if(self.orbitStats):
+                tmpg = generated(s.q)
+                self.orbitMax[:,it] = tmpg
+                self.orbitMin[:,it] = tmpg
+                self.sorbitMax[:,it] = tmpg
+                self.sorbitMin[:,it] = tmpg
             
             # forward integration
             if(nf>0):
                 for i in range(nf):
                     qOld = copy.deepcopy(sf.q) 
                     (sf,lj) = self.step(sf,lpFun,self.tp) 
+                    
+                    if(self.orbitStats):
+                        tmpg = generated(sf.q)
+                        self.orbitMax[:,it] = np.maximum(self.orbitMax[:,it],tmpg)
+                        self.orbitMin[:,it] = np.minimum(self.orbitMin[:,it],tmpg)
+                    
                     cqs = sf.q-cen
                     cq = qOld-cen
                    
@@ -290,11 +163,14 @@ class WASPSampler:
                         deadf = 1
                         break
                     
+                    
+                    
                     b += 1
                     lwts[b] = -sf.Ham + ljacf
-                    #print("f")
-                    #print(-sf.Ham + ljacf)
                     
+                    if(self.orbitStats):
+                        self.sorbitMax[:,it] = self.orbitMax[:,it]
+                        self.sorbitMin[:,it] = self.orbitMin[:,it]
                     
                     wtFac = self.defaultWts(b,weightScale,weightRange,medianOrbitSteps)
                     
@@ -312,7 +188,10 @@ class WASPSampler:
                     (sb,lj) = self.step(sb,lpFun,self.tp) 
                     sb.momentumFlip()
                     
-                    
+                    if(self.orbitStats):
+                        tmpg = generated(sb.q)
+                        self.orbitMax[:,it] = np.maximum(self.orbitMax[:,it],tmpg)
+                        self.orbitMin[:,it] = np.minimum(self.orbitMin[:,it],tmpg)
                     
                     cqs = sb.q-cen
                     cq = qOld-cen
@@ -327,12 +206,6 @@ class WASPSampler:
                             break
                         
                     
-                    #stop1 = np.dot(cqs,eta)*np.dot(cq,eta) < 0.0 
-                    #stop2 = max(np.dot(gam,cqs),np.dot(gam,cq)) > 0.0
-                   
-                    #if(stop1 and stop2):
-                    #    break
-                    
                     
                     ljacb += lj
                     
@@ -342,9 +215,10 @@ class WASPSampler:
                     
                     a -= 1
                     lwts[a] = -sb.Ham + ljacb
-                    #print("b")
                     
-                    #print(-sb.Ham + ljacb)
+                    if(self.orbitStats):
+                        self.sorbitMax[:,it] = self.orbitMax[:,it]
+                        self.sorbitMin[:,it] = self.orbitMin[:,it]
                     
                     wtFac = self.defaultWts(a,weightScale,weightRange,medianOrbitSteps)
                     
@@ -403,7 +277,7 @@ class WASPSampler:
             lwtsRange = lwts.lwtsRange()
             
             
-            tuningDiag = pd.Series([self.tp.delta,self.tp.hMacro,ESSfrac,lwtsRange],index=['delta','h','ESSfrac','lwtsRange'])
+            tuningDiag = pd.Series([self.tp.delta,self.tp.hMacro,ESSfrac,lwtsRange,np.min(cen),np.max(cen)],index=['delta','h','ESSfrac','lwtsRange','cenMin','cenMax'])
             
             indexProp = 0.5
             if(b-a>0): indexProp = (ii-a)/(b-a)
@@ -425,34 +299,63 @@ class WASPSampler:
                 deltaQA.push(np.log(conservedRange/self.tp.delta))
                 hQA.pushVec(np.log(self.step.Cobs))
                 
+                if(not adaptCenterOff): cenP2s.push(s.q)
                 
                 if(it>10 and (not deltaOff)): self.tp.delta = orbitLWtRangeTarget/np.exp(deltaQA.quantile(orbitLWtRangeQuantile))
                 if(it>10): self.tp.hMacro = (self.tp.delta*(2.0**self.tp.Cmin)**2/np.exp(hQA.quantile(basicTarget)))**(1.0/3.0)
                 if(it>10): medianOrbitSteps = max(1.0,np.median(numOrbtiSteps[0:it]))
-                if(it>10 and hasattr(self.tp,'oSigmaSq')):
-                    if(self.tp.thermostatFac>0.0):
-                        self.tp.oSigmaSq = 1.0/(self.tp.thermostatFac*self.tp.hMacro*2**(-self.tp.Cmin))
+                #if(it>10 and hasattr(self.tp,'oSigmaSq')):
+                #    if(self.tp.thermostatFac>0.0):
+                #        self.tp.oSigmaSq = 1.0/(self.tp.thermostatFac*self.tp.hMacro*2**(-self.tp.Cmin))
                 
                 
-                print("medianOrbitSteps: " + str(medianOrbitSteps))
+                if(it>10 and not adaptCenterOff): cen=cenP2s.quantile()
+                if((it+1) % 100 == 0): print((np.min(cen),np.max(cen)))
             
             s.momentumRefresh(lpFun, self.tp)
             
             
         self.diagnostics = pd.DataFrame(diagnostics)
+
+
+
+class fixedCenterWASPSampler(WASPSampler):
+    def name(self):
+        return("WASPS0")
+    
+    def run(self,lpFun,q0,
+            step=hmc.adaptHMCstepE(),
+            tp0=hmc.HMCtuningPars(),
+            generated=lambda q : q,
+            weightFun=WASPSampler.defaultWts,
+            center=0.0,
+            niter=10000,
+            nwarmup=1000,
+            L=2**10,
+            orbitLWtRangeTarget=0.3,
+            orbitLWtRangeQuantile=0.9,
+            basicTarget=0.8,
+            weightRange=0.25,
+            weightScale=5.0,
+            deltaOff=False):
+        super().run(lpFun,q0,step,tp0,generated,weightFun,center,niter,nwarmup,L,orbitLWtRangeTarget,
+                    orbitLWtRangeQuantile,basicTarget,weightRange,weightScale,deltaOff,adaptCenterOff=True)
         
-#w = WASPSampler()
+
+    
+
+#w = fixedCenterdWASPSampler()
 
 # # tp = hmc.HMCtuningPars()
 # # #tp = iso.IKtuningPars()
-#tp = nh.NHtuningPars(oSigmaSq=0.5**2)
+#tp = hmc.HMCtuningPars()
 #tp.Cmin = 2
 
-# # step = hmc.adaptHMCstepE()
+#step = hmc.adaptHMCstepE()
 # # #step = iso.adaptIKstepE()
 #step = nh.adaptNHstepE()
 
-#lp =  td.corrGauss # td.modFunnel #td.funnel1 #  td.stdGauss #   td.smileDistr #        td.corrGauss #  td.funnel10 #     
+#lp = td.smileDistr #  td.stdGauss # td.modFunnel #td.funnel1 #  td.stdGauss #          td.corrGauss #  td.funnel10 #     
 
 #q0 = np.random.normal(size=2)
 

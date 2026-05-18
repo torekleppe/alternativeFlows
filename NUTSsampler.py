@@ -22,12 +22,12 @@ class fullOrbit_:
 
     def pushF(self,s,it):
         self.qs = np.hstack([self.qs, s.q.reshape(-1,1)])
-        self.it = np.concat((self.it,np.array([it])))
+        self.it = np.concatenate((self.it,np.array([it])))
         
     
     def pushB(self,s,it):
         self.qs = np.hstack([s.q.reshape(-1,1),self.qs])
-        self.it = np.concat((np.array([it]),self.it))
+        self.it = np.concatenate((np.array([it]),self.it))
         self.ind += 1
 
     def plot(self):
@@ -167,9 +167,9 @@ class NUTSampler:
     
     
     
-    def __init__(self,debug=True):
+    def __init__(self,debug=True,orbitStats=False):
         self.debug = debug
-        
+        self.orbitStats = orbitStats
     
     
     
@@ -225,13 +225,24 @@ class NUTSampler:
         if(self.debug): self.fo = fullOrbit_(scurr)
             
         
-        
+        if(self.orbitStats):
+            tmpg = self.generated(scurr.q)
+            self.orbitMaxL = copy.deepcopy(tmpg)
+            self.orbitMinL = copy.deepcopy(tmpg)
+            self.sorbitMaxL = copy.deepcopy(tmpg)
+            self.sorbitMinL = copy.deepcopy(tmpg)
         
         # first integration step
         if(np.random.uniform()<0.5):
             #print("first forward")
             # forward integration
             (sP,lJac) = self.step(sP,self.lp,self.tp)
+            
+            if(self.orbitStats):
+                tmpg = self.generated(sP.q)
+                self.orbitMaxL = np.maximum(self.orbitMaxL,tmpg)
+                self.orbitMinL = np.minimum(self.orbitMinL,tmpg)
+            
             cljacP += lJac
             b = 1
             self.lwts[b] = -sP.Ham + lJac
@@ -248,6 +259,12 @@ class NUTSampler:
             sM.momentumFlip()
             (sM,lJac) = self.step(sM,self.lp,self.tp)
             sM.momentumFlip()
+            
+            if(self.orbitStats):
+                tmpg = self.generated(sM.q)
+                self.orbitMaxL = np.maximum(self.orbitMaxL,tmpg)
+                self.orbitMinL = np.minimum(self.orbitMinL,tmpg)
+            
             cljacM += lJac
             a = -1
             self.lwts[a] = -sM.Ham + lJac
@@ -267,6 +284,10 @@ class NUTSampler:
               
             #print("Uturn at first doubling")
             return(sSampled,dd)
+        
+        if(self.orbitStats):
+            self.sorbitMaxL = copy.deepcopy(self.orbitMaxL)
+            self.sorbitMinL = copy.deepcopy(self.orbitMinL)
         
         # done with first integration leg, and continuing
         for i in range(1,self.M+1):
@@ -291,6 +312,12 @@ class NUTSampler:
                         for k in range(2):
                             # integrate and store weight
                             (sP,lJac) = self.step(sP,self.lp,self.tp)
+                            
+                            if(self.orbitStats):
+                                tmpg = self.generated(sP.q)
+                                self.orbitMaxL = np.maximum(self.orbitMaxL,tmpg)
+                                self.orbitMinL = np.minimum(self.orbitMinL,tmpg)
+                            
                             cljacP += lJac
                             if(self.debug): self.fo.pushF(sP,i+1)
                             bnew += 1
@@ -343,6 +370,11 @@ class NUTSampler:
                             (sM,lJac) = self.step(sM,self.lp,self.tp)
                             sM.momentumFlip()
                             
+                            if(self.orbitStats):
+                                tmpg = self.generated(sM.q)
+                                self.orbitMaxL = np.maximum(self.orbitMaxL,tmpg)
+                                self.orbitMinL = np.minimum(self.orbitMinL,tmpg)
+                            
                             cljacM += lJac
                             if(self.debug): self.fo.pushB(sM,i+1)
                             anew -= 1
@@ -377,7 +409,9 @@ class NUTSampler:
                     if(np.abs(tasks[j,0]-tasks[j,1])>1):
                         self.stateList.removeRange(np.min(tasks[j,])+1, np.max(tasks[j,])-1)
                             
-                
+            if(self.orbitStats):
+                self.sorbitMaxL = copy.deepcopy(self.orbitMaxL)
+                self.sorbitMinL = copy.deepcopy(self.orbitMinL)    
                 
             # done forward/backward if
             if(np.random.uniform()<subOrbitWtSum/accWtsum):
@@ -400,6 +434,8 @@ class NUTSampler:
             # prepare for new suborbit
             a = anew
             b = bnew
+            
+            
         
         #print("expended available integration steps")
         dd=pd.Series([self.M,L_,a,b,a,b,2],index=['NutsIter','L','a','b','aInt','bInt','NUTtype'])
@@ -430,7 +466,8 @@ class NUTSampler:
         
 
 
-        
+    def name(self):
+        return("NUTS")
 
     def run(self,lpFun,q0,
             step=hmc.adaptHMCstepE(),
@@ -475,6 +512,13 @@ class NUTSampler:
         g0 = generated(q0)
         self.samples = np.zeros((len(g0),niter+1))
         self.samples[:,0] = g0
+        self.generated = generated
+        
+        if(self.orbitStats):
+            self.orbitMax = np.zeros((len(g0),niter))
+            self.orbitMin = np.zeros((len(g0),niter))
+            self.sorbitMax = np.zeros((len(g0),niter))
+            self.sorbitMin = np.zeros((len(g0),niter))
         
         diagnostics = []
         
@@ -497,6 +541,13 @@ class NUTSampler:
             (sc,diagRow) = self.buildOrbit(sc)
             
             self.samples[:,it+1] = generated(sc.q)
+            
+            if(self.orbitStats):
+                self.orbitMax[:,it] = self.orbitMaxL
+                self.orbitMin[:,it] = self.orbitMinL
+                self.sorbitMax[:,it] = self.sorbitMaxL
+                self.sorbitMin[:,it] = self.sorbitMinL
+            
             
             ESSfrac = self.lwts.wtsESS()
             
@@ -527,14 +578,14 @@ class NUTSampler:
                 
                 if(it>10 and (not deltaOff)): self.tp.delta = orbitLWtRangeTarget/np.exp(deltaQA.quantile(orbitLWtRangeQuantile))
                 if(it>10): self.tp.hMacro = (self.tp.delta*(2.0**self.tp.Cmin)**2/np.exp(hQA.quantile(basicTarget)))**(1.0/3.0)
-                if(it>10 and hasattr(self.tp,'oSigmaSq')):
-                    if(self.tp.thermostatFac>0.0):
-                        self.tp.oSigmaSq = 1.0/(self.tp.thermostatFac*self.tp.hMacro*2**(-self.tp.Cmin))
+                #if(it>10 and hasattr(self.tp,'oSigmaSq')):
+                #    if(self.tp.thermostatFac>0.0):
+                #        self.tp.oSigmaSq = 1.0/(self.tp.thermostatFac*self.tp.hMacro*2**(-self.tp.Cmin))
                 #if(it>10): self.tp.delta = orbitLWtRangeTarget/np.exp(deltaP2.quantile())
                 #if(it>10): self.tp.hMacro = (self.tp.delta/np.exp(hP2.quantile()))**(1.0/3.0)
             
             
-                print((self.tp.delta,conservedRange))
-                print(self.tp.hMacro)
+                #print((self.tp.delta,conservedRange))
+                #print(self.tp.hMacro)
         
         self.diagnostics = pd.DataFrame(diagnostics)

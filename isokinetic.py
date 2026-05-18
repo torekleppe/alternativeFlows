@@ -84,6 +84,10 @@ class IKintegrators: #(ABC):
         
         for i in range(nstep):
             
+            if(delta>700):
+                
+                return((IKState(),np.nan,np.nan))
+            
             sh = np.sinh(delta)
             ch = np.cosh(delta)
             
@@ -104,6 +108,11 @@ class IKintegrators: #(ABC):
             gnorm = np.linalg.norm(g)
             delta = (0.5*hh/(d-1))*gnorm
             ee = (1.0/gnorm)*g
+            
+            if(delta>700):
+                
+                return((IKState(),np.nan,np.nan))
+            
             
             sh = np.sinh(delta)
             ch = np.cosh(delta)
@@ -177,6 +186,8 @@ class adaptIKstepE(IKintegrators):
         self.basic = []
         self.Cobs = []
     
+    def name(self):
+        return("adaptIKstepE")
     
     def reset(self):
         self.gradEval = 0
@@ -263,13 +274,6 @@ class adaptIKstepE(IKintegrators):
 
 
 
-
-        
-#lp = td.funnel10 #td.modFunnel   # td.stdGauss #  
-#s= IKState()
-#tp = IKtuningPars(hMacro=0.5)
-#s.firstEval(lp, 3*np.random.normal(size=11), tp) 
-#s.momentumRefresh(lp, tp)   
 
 #step = adaptIKstepE()
 #(s1,ljac) = step(s,lp,tp)

@@ -104,6 +104,8 @@ class adaptHMCstepE(HMCintegrators):
         self.basic = []
         self.Cobs = []
     
+    def name(self):
+        return("adaptHMCstepE")
     
     def reset(self):
         self.gradEval = 0

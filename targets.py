@@ -70,7 +70,7 @@ def modFunnel(q,v=None):
 
 
 def zeroMeanAR1(q):
-    rho = 0.99
+    rho = 0.95
     d = len(q)
     lp = -0.5*q[0]**2 - 0.5/(1.0-rho**2)*np.sum((q[1:d]-rho*q[0:(d-1)])**2)
     g = np.zeros_like(q)

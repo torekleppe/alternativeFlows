@@ -85,7 +85,32 @@ class P2quantile:
         self.pushCore(x)
 
 
-        
+
+class P2vector:
+    def __init__(self,d,prob=0.5):
+        self.P2s = [P2quantile(prob=prob) for i in range(d)]
+    
+    def push(self,xVec):
+        for i in range(len(self.P2s)):
+            self.P2s[i].push(xVec[i])
+    
+    def quantile(self):
+        ret = np.zeros(len(self.P2s))
+        for i in range(len(self.P2s)):
+            ret[i] = self.P2s[i].quantile()
+        return(ret)
+
+
+
+
+#ff = P2vector(10)
+
+#for i in range(1000):
+#    ff.push(-10+3*np.random.normal(size=10))
+    
+#print(ff.quantile())
+
+
 #f = P2quantile(0.6)
 #rr = np.random.normal(size=10000)
 #f.push(rr)
