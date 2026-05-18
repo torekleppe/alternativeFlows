@@ -52,9 +52,10 @@ class fullOrbitW:
         plt.axis(ax)
 class WALNUTSP:
     
-    def __init__(self,debug=False,orbitStats=False): # make consistent with NUTS
+    def __init__(self,debug=False,orbitStats=False,discardPassDoubling=False): # make consistent with NUTS
         self.debug = debug
         self.orbitStats = orbitStats
+        self.discardPassDoubling = discardPassDoubling
     
     def name(self):
         return("WALNUTS-P")
@@ -141,6 +142,7 @@ class WALNUTSP:
                     if(ts>0.0 and ts < 1.0):
                         if((1.0-ts)*np.dot(cq,gam)+ts*np.dot(cqs,gam)>0.0):
                             donef = True
+                            if(self.discardPassDoubling): wtSum = 0.0
                             if(self.debug):
                                 fo.pushD(sf)
                             break
@@ -201,6 +203,7 @@ class WALNUTSP:
                     if(ts>0.0 and ts < 1.0):
                         if((1.0-ts)*np.dot(cq,gam)+ts*np.dot(cqs,gam)>0.0):
                             doneb = True
+                            if(self.discardPassDoubling): wtSum = 0.0
                             if(self.debug):
                                 fo.pushD(sb)
                             break
