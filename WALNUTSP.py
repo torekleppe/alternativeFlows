@@ -52,10 +52,10 @@ class fullOrbitW:
         plt.axis(ax)
 class WALNUTSP:
     
-    def __init__(self,debug=False,orbitStats=False,discardPassDoubling=False): # make consistent with NUTS
+    def __init__(self,debug=False,orbitStats=False,orbit2k=False): # make consistent with NUTS
         self.debug = debug
         self.orbitStats = orbitStats
-        self.discardPassDoubling = discardPassDoubling
+        self.orbit2k = orbit2k
     
     def name(self):
         return("WALNUTS-P")
@@ -142,7 +142,7 @@ class WALNUTSP:
                     if(ts>0.0 and ts < 1.0):
                         if((1.0-ts)*np.dot(cq,gam)+ts*np.dot(cqs,gam)>0.0):
                             donef = True
-                            if(self.discardPassDoubling): wtSum = 0.0
+                            
                             if(self.debug):
                                 fo.pushD(sf)
                             break
@@ -203,7 +203,7 @@ class WALNUTSP:
                     if(ts>0.0 and ts < 1.0):
                         if((1.0-ts)*np.dot(cq,gam)+ts*np.dot(cqs,gam)>0.0):
                             doneb = True
-                            if(self.discardPassDoubling): wtSum = 0.0
+                            
                             if(self.debug):
                                 fo.pushD(sb)
                             break
@@ -257,7 +257,204 @@ class WALNUTSP:
         #print(sc)
         return(sSampled,dd)
     
-    
+    def buildOrbit2k(self,sc,it):
+        
+        d = len(sc.q)
+        sf = copy.deepcopy(sc)
+        sb = copy.deepcopy(sc)
+        
+        
+        self.step.reset()
+        self.lwts.reset()
+        self.lwts[0] = -sc.Ham
+        
+        
+        deadf = False
+        deadb = False
+        donef = False
+        doneb = False
+        
+        z1 = np.random.normal(size=d)
+        z2 = np.random.normal(size=d)
+        eta = (1.0/np.sqrt(np.sum(z1**2)))*z1
+        z2 = z2 - (np.sum(z2*eta))*eta
+        gam = (1.0/np.sqrt(np.sum(z2**2)))*z2
+        
+        
+        
+        if(self.orbitStats):
+            tmpg = self.generated(sc.q)
+            self.orbitMax[:,it] = tmpg
+            self.orbitMin[:,it] = tmpg
+            self.sorbitMax[:,it] = tmpg
+            self.sorbitMin[:,it] = tmpg
+        
+        a = 0
+        b = 0
+        
+        ljacf = 0.0
+        ljacb = 0.0
+        
+        accWtsum = 1.0
+        iSampled = 0
+        Sampled = copy.deepcopy(sc)
+        
+        if(self.debug):
+            fo = fullOrbitW(sc)
+            fo.pushPlane(eta, gam, self.cen)
+            
+        sSampled = copy.deepcopy(sc)
+        
+        for doubCount in range(self.L):
+            
+            nstep = 2**doubCount
+            
+            forward = np.random.uniform() < 0.5
+            
+            wtSum = 0.0
+            
+            if(forward and (not deadf)):
+                # forward integration
+                
+                for i in range(nstep):
+                    qOld = copy.deepcopy(sf.q) 
+                    (sf,lj) = self.step(sf,self.lp,self.tp) 
+                    
+                    
+                    
+                    if(self.orbitStats):
+                        tmpg = self.generated(sf.q)
+                        self.orbitMax[:,it] = np.maximum(self.orbitMax[:,it],tmpg)
+                        self.orbitMin[:,it] = np.minimum(self.orbitMin[:,it],tmpg)
+                    
+                    cqs = sf.q-self.cen
+                    cq = qOld-self.cen
+                   
+                    cqseta = np.dot(cqs,eta)
+                    cqeta = np.dot(cq,eta)
+                    
+                    ts = cqeta/(cqeta-cqseta)
+                    
+                    if(ts>0.0 and ts < 1.0):
+                        if((1.0-ts)*np.dot(cq,gam)+ts*np.dot(cqs,gam)>0.0):
+                            donef = True
+                            
+                            if(self.debug):
+                                fo.pushD(sf)
+                            #break
+                         
+                    ljacf += lj
+                    
+                    if(ljacf < -690.0):
+                        deadf = True
+                        if(self.debug):
+                            fo.pushD(sf)
+                        break
+                    
+                    if(self.debug):
+                        fo.pushF(sf,b+1)
+                    
+                    b += 1
+                    self.lwts[b] = -sf.Ham + ljacf
+                    
+                    if(self.orbitStats):
+                        self.sorbitMax[:,it] = self.orbitMax[:,it]
+                        self.sorbitMin[:,it] = self.orbitMin[:,it]
+                    
+                     
+                    wt = self.lwts.normalizedWt(b)
+                    wtSum += wt
+                    
+                    if(wtSum > 1.0e-14 and np.random.uniform() < wt/wtSum):
+                        iSampledLoc = b
+                        sampledLoc = copy.deepcopy(sf)
+                
+                    
+                
+                
+            elif((not forward) and (not deadb)):
+                # backward integration
+                
+                for i in range(nstep):
+                    qOld = copy.deepcopy(sb.q)
+                    sb.momentumFlip()
+                    (sb,lj) = self.step(sb,self.lp,self.tp) 
+                    sb.momentumFlip()
+                    
+                    
+                    
+                    if(self.orbitStats):
+                        tmpg = self.generated(sb.q)
+                        self.orbitMax[:,it] = np.maximum(self.orbitMax[:,it],tmpg)
+                        self.orbitMin[:,it] = np.minimum(self.orbitMin[:,it],tmpg)
+                    
+                    cqs = sb.q-self.cen
+                    cq = qOld-self.cen
+                   
+                    cqseta = np.dot(cqs,eta)
+                    cqeta = np.dot(cq,eta)
+                    
+                    ts = cqeta/(cqeta-cqseta)
+                    
+                    if(ts>0.0 and ts < 1.0):
+                        if((1.0-ts)*np.dot(cq,gam)+ts*np.dot(cqs,gam)>0.0):
+                            doneb = True
+                            
+                            if(self.debug):
+                                fo.pushD(sb)
+                            #break
+                         
+                    ljacb += lj
+                    
+                    if(ljacb < -690.0):
+                        deadb = True
+                        if(self.debug):
+                            fo.pushD(sb)
+                        break
+                    
+                    a -= 1
+                    self.lwts[a] = -sb.Ham + ljacb
+                    
+                    if(self.orbitStats):
+                        self.sorbitMax[:,it] = self.orbitMax[:,it]
+                        self.sorbitMin[:,it] = self.orbitMin[:,it]
+                    
+                    if(self.debug):
+                        fo.pushB(sb,a-1)
+                     
+                    wt = self.lwts.normalizedWt(a)
+                    wtSum += wt
+                    
+                    if(wtSum > 1.0e-14 and np.random.uniform() < wt/wtSum):
+                        iSampledLoc = a
+                        sampledLoc = copy.deepcopy(sb)
+                
+            
+                
+            
+            
+            ## done integration part
+            if(np.random.uniform()<wtSum/accWtsum):
+                #print("accepted state from proposed subOrbit: a = " + str(subOrbitWtSum/accWtsum))
+                iSampled = iSampledLoc
+                sSampled = copy.deepcopy(sampledLoc)
+            
+            if(donef and doneb):
+                break
+            
+            if(deadf and deadb):
+                break
+            
+            accWtsum += wtSum
+            #print((a,b,iSampled))
+        if(self.debug):
+            fo.plot()
+        
+        dd = pd.Series([1*deadf,1*deadb,1*donef,1*doneb,
+                        iSampled,a,b],
+                       index=['revRejectF','revRejectB','planeHitF','planeHitB','j','a','b'])
+        #print(sc)
+        return(sSampled,dd)
     
     def run(self,lpFun,q0,
             step=hmc.adaptHMCstepE(),
@@ -323,7 +520,11 @@ class WALNUTSP:
             if((it+1) % 1000 == 0): print("iteration # " + str(it+1))
             
             s.momentumRefresh(lpFun, self.tp)
-            (s,dd) = self.buildOrbit(s,it)
+            
+            if(not self.orbit2k):
+                (s,dd) = self.buildOrbit(s,it)
+            else:
+                (s,dd) = self.buildOrbit2k(s,it)
     
     
             self.samples[:,it+1] = generated(s.q)
@@ -388,6 +589,6 @@ class WALNUTSP0(WALNUTSP):
 import targets as td
 
 
-#samp = WALNUTSP(debug=False)
-#samp.run(td.smileDistr ,q0=np.random.normal(size=2),niter=11000)
+#samp = WALNUTSP(debug=False,orbit2k=True)
+#samp.run(td.modFunnel ,q0=np.random.normal(size=2),niter=11000)
 

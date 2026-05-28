@@ -14,7 +14,7 @@ import arviz as az
 import matplotlib.pyplot as plt
 
 
-np.random.seed(2)
+np.random.seed(3)
 q0 = np.random.normal(size=500)
 for i in range(499):
     q0[i+1] = 0.95*q0[i] + np.sqrt(1.0-0.95**2)*q0[i+1]
